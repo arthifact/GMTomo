@@ -1,0 +1,20 @@
+# GMTomo: every command reads this file. Results go to outputs/<name>/.
+name = "example"
+
+[data]
+folder = "data/example"      # stations.csv, events.csv, picks.csv
+
+[grid]                       # km
+spacing = 1
+depth = 60
+margin = 20                  # beyond the outermost station or event
+
+[start]                      # the 1-D start: velocities (km/s) at depths (km), linear in between
+depth = [0, 20, 35, 60]
+vp = [5.8, 6.5, 8.0, 8.2]
+vs = [3.35, 3.75, 4.6, 4.7]
+
+[invert]
+widths = [10, 20, 40]        # km: the sizes of the Gaussians
+iterations = 2
+seed = 0
