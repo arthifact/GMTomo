@@ -22,7 +22,7 @@ Put three CSV files in one folder, for example `data/my_region/`, and set `folde
 
 - **phase**: anything starting with P or S counts (P, Pg, Pn, S, Sg, ...); other phases are skipped.
 - **time**: seconds or ISO 8601, on any clock. Origin times are not needed.
-- **events**: the catalogue locations, kept fixed.
+- **events**: the catalogue locations, where relocation starts (`relocate = false` in `config.toml` keeps them).
 
 `uv run src/example.py` writes a synthetic example to `data/example/`. Nothing here except this file is
 tracked by git.

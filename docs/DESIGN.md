@@ -7,8 +7,9 @@ zone. They were then checked in 3-D on the example that `src/example.py` writes.
 
 <img src="figures/subduction_recovery.png" width="640" alt="The true and the recovered example subduction zone">
 
-*The example: a slab 6% fast and a crustal body 8% slow, from 36 stations and 400 earthquakes. Grey: no
-ray passes. Two iterations, 98 s on a laptop.*
+*The example: a slab 6% fast and a crustal body 8% slow, from 36 stations and 400 earthquakes whose catalogue
+locations are off by 2 km horizontally and 4 km in depth. Dots: the true and the relocated earthquakes. Grey:
+no ray passes. Two iterations, 98 s on a laptop.*
 
 ---
 
@@ -76,29 +77,45 @@ within 10% of the truth in 2-D, and within 10% in the 3-D example (0.055 s for 0
 - **1 km grid by default.** At 2 km the remaining error (13 ms on average, up to 90 ms) is close to typical
   picking noise.
 
-## 6. Origin times
+## 6. Origin times and locations
 
-Origin times are unknown, so each earthquake's mean residual is removed before fitting, from the data and
-from the sensitivities alike. Only the differences between one earthquake's picks are used, and any
-clock will do.
+An earthquake's origin time and location are as unknown as the velocities, and they trade off against them:
+a quake placed too deep looks like slow rock above it. GMTomo handles both the standard way [4, 5]:
+
+- **Relocate every earthquake** each iteration, in the current model, from its P and S picks (each phase
+  weighted by its noise): four unknowns, at most 5 km per step. The time field's slope at the earthquake is
+  how its times change when it moves, so this costs nothing new.
+- **Separate the parameters.** Before the velocity solve, whatever an origin time or a small move of each
+  earthquake could explain is projected out of its picks, in the data and the sensitivities alike. The
+  velocities then cannot absorb location errors. Only differences between one earthquake's picks are used,
+  so any clock will do.
+
+On the example, with the catalogue off by 2.0 km horizontally and 3.9 km in depth:
+
+| | Vp error where rays pass | Shape match | Locations (horizontal, depth) | Final P, S residual |
+|---|---|---|---|---|
+| Catalogue kept | 254 to 177 m/s | 0.73 | 2.0 km, 3.9 km | 0.251 s, 0.438 s |
+| **Relocated** | 269 to **79 m/s** | **0.93** | **0.4 km, 0.9 km** | **0.056 s, 0.111 s** |
+| *True locations given* | *273 to 54 m/s* | *0.97* | | |
+
+Kept, the wrong locations spoil the model and leave residuals five times the noise. Relocated, residuals
+fall to the noise and the model gets most of the way back.
 
 ## 7. What it recovers
 
-On the example, after two iterations, with residuals down to the noise (P 0.211 to 0.054 s, S 0.391 to
-0.108 s):
+On the example after two iterations, relocating (98 s):
 
 | | Vp error | Shape match | Vs error | Shape match |
 |---|---|---|---|---|
-| Where rays pass | 273 to **54 m/s** | 0.97 | 156 to **37 m/s** | 0.95 |
-| Under the network, 0-50 km | 220 to 108 m/s | 0.90 | 131 to 67 m/s | 0.89 |
+| Where rays pass | 269 to **79 m/s** | 0.93 | 151 to **52 m/s** | 0.91 |
+| Under the network, 0-50 km | 220 to 136 m/s | | 131 to 91 m/s | |
 
 *Shape match: the correlation between the true and the recovered change from the start.* Where no ray
-passes the model stays at the start. Peaks overshoot a little: -11% found where the truth is -8%.
+passes the model stays at the start. Peaks overshoot a little, and a small fast patch appears beside the
+slow body: a trade-off the data cannot resolve.
 
 ## 8. What it does not do yet
 
-- **Relocate earthquakes.** Catalogue locations are kept fixed, so a wrong location becomes velocity structure.
-  The standard remedy is to solve for locations alongside the velocities [4].
 - **Large regions.** The Earth is flat, which suits a few hundred kilometres.
 - **Station corrections, anisotropy, later phases.** First P and S arrivals only.
 - **Real data.** So far only synthetic tests, one seed each.
@@ -109,3 +126,4 @@ passes the model stays at the start. Peaks overshoot a little: -11% found where 
 2. Sethian. A fast marching level set method for monotonically advancing fronts. *PNAS* 93(4), 1996.
 3. Fomel, Luo & Zhao. Fast sweeping method for the factored eikonal equation. *J. Comput. Phys.* 228, 2009.
 4. Thurber. Earthquake locations and three-dimensional crustal structure in the Coyote Lake area, central California. *JGR* 88(B10), 1983.
+5. Pavlis & Booker. The mixed discrete-continuous inverse problem: application to the simultaneous determination of earthquake hypocenters and velocity structure. *JGR* 85(B9), 1980.

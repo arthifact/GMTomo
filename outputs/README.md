@@ -6,6 +6,7 @@ One folder per run, named by `name` in its config:
 outputs/example/
   config.toml     the config that made this run
   model.npz       invert: the 3-D model
+  events.csv      invert: every event relocated, and how far it moved
   gaussians.csv   invert: every Gaussian's velocity change, most significant first
   residuals.csv   invert: every pick's final residual
   summary.json    invert: per iteration, the residual, the estimated noise, the damping and the time

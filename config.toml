@@ -17,4 +17,5 @@ vs = [3.35, 3.75, 4.6, 4.7]
 [invert]
 widths = [10, 20, 40]        # km: the sizes of the Gaussians
 iterations = 2
+relocate = true             # move the earthquakes too; false keeps the catalogue locations
 seed = 0

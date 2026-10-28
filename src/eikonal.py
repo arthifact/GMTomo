@@ -35,10 +35,9 @@ def field(speed, grid, source):
     return march(speed, grid, source)[0] * grid.corrections[key]
 
 
-def rays(times, grid, sources, end, step=1.):
-    """Steepest-descent paths through `times` from each source [n, 3] to `end` [3], in steps of `step` km.
-    Returns sample points [m, 3], the path length each stands for [m] (km) and its source [m]."""
-    gradient = np.gradient(times, grid.spacing)
+def rays(gradient, grid, sources, end, step=1.):
+    """Steepest-descent paths down a time field's `gradient` (three arrays) from each source [n, 3] to `end` [3],
+    in steps of `step` km. Returns sample points [m, 3], the path length each stands for [m] (km) and its source [m]."""
     h = min(step, grid.spacing)
     position, alive = np.array(sources, dtype=float), np.ones(len(sources), dtype=bool)
     points, lengths, owners = [], [], []
@@ -67,18 +66,21 @@ def rays(times, grid, sources, end, step=1.):
     return np.concatenate(points), np.concatenate(lengths), np.concatenate(owners)
 
 
-def linearise(speed, grid, gaussians, data, phase):
-    """For every pick of `phase`: its index, predicted time (s, from origin time 0), and sensitivity to every
-    Gaussian [picks, K] (s per km/s); plus the ray length through every node (km)."""
+def linearise(speed, grid, gaussians, data, phase, events=None):
+    """For every pick of `phase`: its index, predicted time (s, from origin time 0), its sensitivity to moving the
+    event [picks, 3] (s/km: the time field's gradient there) and to every Gaussian [picks, K] (s per km/s); plus
+    the ray length through every node (km). `events` [E, 3] replaces the catalogue positions."""
     picks = np.flatnonzero(data.phase == phase)
-    predicted, G = np.zeros(len(picks)), np.zeros((len(picks), len(gaussians)))
+    predicted, moving, G = np.zeros(len(picks)), np.zeros((len(picks), 3)), np.zeros((len(picks), len(gaussians)))
     coverage = np.zeros(grid.shape)
     for station in np.unique(data.station[picks]):
         rows = np.flatnonzero(data.station[picks] == station)
         times = field(speed, grid, data.stations[station])
-        sources = data.events[data.event[picks[rows]]]
+        sources = (data.events if events is None else events)[data.event[picks[rows]]]
+        gradient = np.gradient(times, grid.spacing)
         predicted[rows] = grid.sample(times, sources)
-        points, lengths, owners = rays(times, grid, sources, data.stations[station])
+        moving[rows] = np.stack([grid.sample(component, sources) for component in gradient], 1)
+        points, lengths, owners = rays(gradient, grid, sources, data.stations[station])
         weight = -lengths / grid.sample(speed, points) ** 2
         for i in range(0, len(points), CHUNK):
             part = slice(i, i + CHUNK)
@@ -87,4 +89,4 @@ def linearise(speed, grid, gaussians, data, phase):
             G[rows] += spread @ gaussians.at(points[part])
         node = np.clip(np.round(grid.index(points)).astype(int).T, 0, np.array(grid.shape) - 1)
         np.add.at(coverage, tuple(node.T), lengths)
-    return picks, predicted, G, coverage
+    return picks, predicted, moving, G, coverage

@@ -1,5 +1,5 @@
-"""Checks of the travel times, the sensitivities, the origin times, the calibration, the CSV reading and a
-whole run on a small synthetic subduction zone.
+"""Checks of the travel times, the sensitivities, the separation of origin times and locations, the
+calibration, relocation, the CSV reading and a whole run on a small synthetic subduction zone.
 
     uv run tests/test_gmtomo.py
 """
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from data import Data  # noqa: E402
 from eikonal import field, linearise, march  # noqa: E402
 import example  # noqa: E402
-from invert import calibrate, centre, invert  # noqa: E402
+from invert import Separation, calibrate, invert, relocate  # noqa: E402
 from model import Gaussians, Grid  # noqa: E402
 
 RNG = np.random.default_rng(0)
@@ -54,28 +54,52 @@ class TravelTimeTests(unittest.TestCase):
         gaussians, v = Gaussians(grid, [10., 20.]), gradient_model(grid)
         c = np.zeros(len(gaussians))
         c[RNG.choice(len(gaussians), 5, replace=False)] = RNG.normal(0, .02, 5)
-        _, before, G, _ = linearise(v, grid, gaussians, data, 'P')
-        _, after, _, _ = linearise(v + gaussians.render(c), grid, gaussians, data, 'P')
+        _, before, _, G, _ = linearise(v, grid, gaussians, data, 'P')
+        _, after, _, _, _ = linearise(v + gaussians.render(c), grid, gaussians, data, 'P')
         change = after - before
         self.assertLess(np.linalg.norm(change - G @ c) / np.linalg.norm(change), .05)
 
 
 class InversionTests(unittest.TestCase):
-    def test_origin_times_do_not_matter(self):
-        events = np.repeat(np.arange(10), 5)
-        times = RNG.normal(size=50)
-        np.testing.assert_allclose(centre(times, events), centre(times + 100 * RNG.normal(size=10)[events], events))
+    def test_origin_times_and_small_moves_do_not_matter(self):
+        events, moving = np.repeat(np.arange(10), 8), RNG.normal(size=(80, 3))
+        times, shifts, origins = RNG.normal(size=80), RNG.normal(size=(10, 3)), 100 * RNG.normal(size=10)
+        separate = Separation(events, moving)
+        moved = times + origins[events] + np.sum(moving * shifts[events], 1)
+        np.testing.assert_allclose(separate(times), separate(moved), atol=1e-9)
+        np.testing.assert_allclose(Separation(events)(times), Separation(events)(times + origins[events]), atol=1e-9)
 
     def test_calibration_finds_the_noise(self):
         events = np.repeat(np.arange(200), 10)
-        G = centre(RNG.normal(size=(2000, 60)), events)
+        separate = Separation(events)
+        G = separate(RNG.normal(size=(2000, 60)))
         truth = np.zeros(60)
         truth[:5] = 1
-        r = G @ truth + .3 * centre(RNG.normal(size=2000), events)
-        c, std, noise, damping = calibrate(G, r, events, np.eye(60), np.random.default_rng(1))
+        r = G @ truth + .3 * separate(RNG.normal(size=2000))
+        c, std, noise, damping = calibrate(G, r, separate, np.eye(60), np.random.default_rng(1))
         self.assertAlmostEqual(noise, .3, delta=.03)
         self.assertLess(np.linalg.norm(c - truth), np.linalg.norm(truth) / 2)
         self.assertTrue((std > 0).all())
+
+
+class RelocationTests(unittest.TestCase):
+    def test_relocation_moves_events_towards_the_truth(self):
+        grid = Grid(NETWORK, spacing=2., depth=50., margin=10.)
+        v = gradient_model(grid)
+        stations = np.c_[RNG.uniform(-40, 40, (12, 2)), np.zeros(12)]
+        data = SimpleNamespace(stations=stations, events=NETWORK.events, event=np.repeat(np.arange(25), 12),
+                               station=np.tile(np.arange(12), 25), phase=np.full(300, 'P'))
+        data.time = np.concatenate([grid.sample(field(v, grid, stations[s]), NETWORK.events[[e]])
+                                    for e, s in zip(data.event, data.station)]) + 50
+        wrong = NETWORK.events + RNG.normal(0, [2, 2, 4], NETWORK.events.shape)
+        positions = wrong.copy()
+        for _ in range(3):
+            picks, predicted, moving, _, _ = linearise(v, grid, Gaussians(grid, [20.]), data, 'P', positions)
+            r = Separation(data.event[picks])(data.time[picks] - predicted)
+            shifts, _ = relocate({'P': (picks, r, moving, .05)}, data.event, positions, grid)
+            positions = positions + shifts
+        before = np.linalg.norm(wrong - NETWORK.events, axis=1).mean()
+        self.assertLess(np.linalg.norm(positions - NETWORK.events, axis=1).mean(), before / 3)
 
 
 class RunTests(unittest.TestCase):
@@ -100,7 +124,7 @@ class RunTests(unittest.TestCase):
             data = Data(folder)
             grid = Grid(data, spacing=2., depth=60., margin=20.)
             start = {p: grid.layered(example.DEPTH, v) for p, v in (('P', example.VP), ('S', example.VS))}
-            speed, *_ = invert(data, grid, Gaussians(grid, [10., 20., 40.]), start, iterations=1, log=lambda *_: None)
+            speed, *_ = invert(data, grid, Gaussians(grid, [10., 20., 40.]), start, iterations=2, log=lambda *_: None)
             true, _ = example.truth(grid)
             under = (np.abs(grid.axes[0])[:, None, None] < 40) & (np.abs(grid.axes[1])[None, :, None] < 40) \
                 & (grid.axes[2][None, None] < 50)

@@ -1,7 +1,8 @@
 # GMTomo: Gaussian Macromodel Tomography
 
-GMTomo turns earthquake arrival times into a 3-D P and S velocity model in minutes, with nothing to
-tune: the model is a sum of Gaussians, and the damping is calibrated on fake earths with known answers.
+GMTomo turns earthquake arrival times into a 3-D P and S velocity model and relocated earthquakes in
+minutes, with nothing to tune: the model is a sum of Gaussians, and the damping is calibrated on fake
+earths with known answers.
 How it works and why: [docs/DESIGN.md](docs/DESIGN.md).
 
 <img src="docs/figures/subduction_recovery.png" width="640" alt="A true and a recovered subduction zone">
@@ -18,7 +19,7 @@ Put `stations.csv`, `events.csv` and `picks.csv` in a folder ([format](data/READ
 in [config.toml](config.toml). Then:
 
 ```bash
-uv run src/invert.py      # -> outputs/<name>/: the model, its Gaussians, the residuals
+uv run src/invert.py      # -> outputs/<name>/: the model, the relocated events, the residuals
 uv run src/plot.py        # -> outputs/<name>/figures/
 ```
 
